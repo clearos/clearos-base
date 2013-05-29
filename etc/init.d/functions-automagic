@@ -1,0 +1,223 @@
+#----------------------------------------------------------------------------
+#
+# Copyright 2004 Point Clark Networks
+#
+# This script is used by init.d scripts that need to know the state
+# of the network (e.g. daemons that bind to only LAN interfaces).
+#
+# If you don't want any of this automagic to occur, then add the following
+# to /etc/sysconfig/automagic: AUTOMAGIC="off"
+#
+#----------------------------------------------------------------------------
+
+IPCALC="/bin/ipcalc"
+IPBIN="/sbin/ip"
+
+
+#----------------------------------------------------------------------------
+# Interface info
+#----------------------------------------------------------------------------
+#
+# Sets variables containing an interface's IP address, network, and
+# netmask (IFIP, IFNETWORK, IFNETMASK, and IFPREFIX).  First attempt to
+# use /etc/sysconfig/network-scripts/ifcfg-xxx, then try getting the
+# "live" configuration using 'ip'.
+#
+#----------------------------------------------------------------------------
+
+automagic_interface_info() {
+	IFIP=
+	IFNETMASK=
+	IFNETWORK=
+	IFPREFIX=
+
+	if [ -f /etc/sysconfig/network-scripts/ifcfg-$1 ]; then
+		IPADDR=
+		NETMASK=
+
+		source /etc/sysconfig/network-scripts/ifcfg-$1
+
+		if ( [ ! -z "$IPADDR" ] && [ ! -z "$NETMASK" ] ); then
+			IFIP=$IPADDR
+			IFNETMASK=$NETMASK
+			IFNETWORK=`$IPCALC --network $IFIP $IFNETMASK | sed s/NETWORK=//i`
+			IFPREFIX=`$IPCALC --prefix $IFIP $IFNETMASK | sed s/PREFIX=//i`
+		else
+			ADDR=`$IPBIN addr show dev $1 | grep $1$ | awk '{ print $2 }'`
+			IFIP=`echo $ADDR | cut -d/ -f1`
+
+			if [ ! -z "$IFIP" ]; then
+				# PPPOEKLUDGE
+				if [ "${1:0:3}" == "ppp" ]; then
+					IFNETMASK="255.255.255.255"
+					IFNETWORK=$IFIP
+					IFPREFIX="32"
+				elif [ ! -z "$ADDR" ]; then
+					IFPREFIX=`echo $ADDR | cut -d/ -f2`
+					IFNETWORK=`$IPCALC --network $ADDR | sed s/NETWORK=//i`
+					IFNETMASK=`$IPCALC --netmask $ADDR | sed s/NETMASK=//i`
+				fi
+			fi
+		fi
+	else
+		ADDR=`$IPBIN addr show dev $1 | grep $1$ | awk '{ print $2 }'`
+		IFIP=`echo $ADDR | cut -d/ -f1`
+
+		if [ ! -z "$IFIP" ]; then
+			# PPPOEKLUDGE 
+			if [ "${1:0:3}" == "ppp" ]; then
+				IFNETMASK="255.255.255.255"
+				IFNETWORK=$IFIP
+				IFPREFIX="32"
+			elif [ ! -z "$ADDR" ]; then
+				IFPREFIX=`echo $ADDR | cut -d/ -f2`
+				IFNETWORK=`$IPCALC --network $ADDR | sed s/NETWORK=//i`
+				IFNETMASK=`$IPCALC --netmask $ADDR | sed s/NETMASK=//i`
+			fi
+		fi
+	fi
+}
+
+
+#----------------------------------------------------------------------------
+# Network info
+#----------------------------------------------------------------------------
+#
+# The following variables are defined with the appropriate data:
+# - AUTOMAGIC_LANIFS: a list of LAN interfaces
+# - AUTOMAGIC_LANIPS: a list of LAN IPs
+# - AUTOMAGIC_LANNETS: a list of LAN networks
+# - AUTOMAGIC_DMZIFS: a list of DMZ interfaces
+# - AUTOMAGIC_DMZIPS: a list of DMZ IPs
+# - AUTOMAGIC_DMZNETS: a list of DMZ networks
+# - AUTOMAGIC_EXTIFS: a list of external interfaces
+# - AUTOMAGIC_EXTIPS: a list of external IPs
+# - AUTOMAGIC_EXTNETS: a list of external networks
+# - AUTOMAGIC_EXTIFSREAL: the *physical* external interfaces (see note below)
+#
+# Deprecated now that multi-WAN support is included:
+# - AUTOMAGIC_EXTIF: the external interface (Internet or upstream)
+# - AUTOMAGIC_EXTIP: the external IP address
+# - AUTOMAGIC_EXTNET: the external network
+# - AUTOMAGIC_EXTIFREAL: the *physical* external interface (see note below)
+#
+###
+#
+# Note the "yet another PPPoE kludge" (sigh).  The AUTOMAGIC_EXTIFREAL is set 
+# to the *physical* external interface (e.g. eth0 physical interface on a 
+# ppp0 PPPoE connection).  Some packages require this.
+#
+#----------------------------------------------------------------------------
+
+if [ -e /etc/clearos/network.conf ]; then
+	source /etc/clearos/network.conf
+
+	# PPPOEKLUDGE: define the real interface used by PPPoE
+	NETCFGDIR="/etc/sysconfig/network-scripts"
+	PPPOEFILES=`ls $NETCFGDIR/ifcfg-ppp* 2>/dev/null`
+	for PPPOEFILE in $PPPOEFILES; do
+		source $PPPOEFILE
+		if [ -n $ETH ]; then
+			PPPOEIFS="$PPPOEIFS $ETH"
+		fi
+		ETH=""
+	done
+
+	# Any non-explicitly defined interface is a LAN interface (legacy issue)
+	UNDEFINEDIF=`ifconfig | grep -B1 addr:[[:digit:]] | grep ^[ae]th | awk '{ print $1 }' | grep -v ":"`
+	for DEFINEDIF in $EXTIF $DMZIF $LANIF $HOTIF $PPPOEIFS; do
+		UNDEFINEDIF=`echo $UNDEFINEDIF | sed "s/$DEFINEDIF//"`
+	done
+	LANIF="$LANIF $UNDEFINEDIF"
+
+	# If standalone mode, all interfaces are considered LANs
+	[ "$MODE" == "standalone" ] && LANIF="$LANIF $EXTIF"
+	[ "$MODE" == "trustedstandalone" ] && LANIF="$LANIF $EXTIF"
+
+	# Load network information
+	for IF in $LANIF; do
+		automagic_interface_info $IF
+		if [ -n "$IFIP" ]; then
+			AUTOMAGIC_LANIFS="$IF $AUTOMAGIC_LANIFS"
+			AUTOMAGIC_LANIPS="$IFIP $AUTOMAGIC_LANIPS"
+			AUTOMAGIC_LANNETS="$IFNETWORK/$IFPREFIX $AUTOMAGIC_LANNETS"
+		fi
+	done
+
+	for IF in $HOTIF; do
+		automagic_interface_info $IF
+		if [ -n "$IFIP" ]; then
+			AUTOMAGIC_HOTIFS="$IF $AUTOMAGIC_HOTIFS"
+			AUTOMAGIC_HOTIPS="$IFIP $AUTOMAGIC_HOTIPS"
+			AUTOMAGIC_HOTNETS="$IFNETWORK/$IFPREFIX $AUTOMAGIC_HOTNETS"
+		fi
+	done
+
+	for IF in $DMZIF; do
+		automagic_interface_info $IF
+		if [ -n "$IFIP" ]; then
+			AUTOMAGIC_DMZIFS="$IF $AUTOMAGIC_DMZIFS"
+			AUTOMAGIC_DMZIPS="$IFIP $AUTOMAGIC_DMZIPS"
+			AUTOMAGIC_DMZNETS="$IFNETWORK/$IFPREFIX $AUTOMAGIC_DMZNETS"
+		fi
+	done
+
+	for IF in $EXTIF; do
+		automagic_interface_info $IF
+		if [ -n "$IFIP" ]; then
+			AUTOMAGIC_EXTIFS="$IF $AUTOMAGIC_EXTIFS"
+			AUTOMAGIC_EXTIPS="$IFIP $AUTOMAGIC_EXTIPS"
+			AUTOMAGIC_EXTNETS="$IFNETWORK/$IFPREFIX $AUTOMAGIC_EXTNETS"
+		fi
+	done
+
+	# PPPOEKLUDGE... sigh
+	STRIPPPPOE=`echo $EXTIF | sed 's/ppp[0-9]//g'`
+	AUTOMAGIC_EXTIFSREAL="$STRIPPPPOE $PPPOEIFS" 
+
+	#--------------------------
+	# Deprecated stuff -- start
+	#--------------------------
+
+	OLDEXTIF=`echo $EXTIF | awk '{ print $1 }'`
+	if [ -n "$OLDEXTIF" ]; then
+		automagic_interface_info $OLDEXTIF
+		AUTOMAGIC_EXTIF="$OLDEXTIF"
+		AUTOMAGIC_EXTIP="$IFIP"
+		AUTOMAGIC_EXTNET="$IFNETWORK/$IFPREFIX"
+	fi
+
+	# PPPOEKLUDGE
+	if [ "$AUTOMAGIC_EXTIF" == "ppp0" ]; then
+		AUTOMAGIC_EXTIFREAL="eth0"
+	else
+		AUTOMAGIC_EXTIFREAL=$AUTOMAGIC_EXTIF
+	fi
+
+	#--------------------------
+	# Deprecated stuff -- end
+	#--------------------------
+
+	if [ 1 == 0 ]; then
+		echo "AUTOMAGIC_LANIPS:     $AUTOMAGIC_LANIPS"
+		echo "AUTOMAGIC_LANIFS:     $AUTOMAGIC_LANIFS"
+		echo "AUTOMAGIC_LANNETS:    $AUTOMAGIC_LANNETS"
+		echo "AUTOMAGIC_HOTIPS:     $AUTOMAGIC_HOTIPS"
+		echo "AUTOMAGIC_HOTIFS:     $AUTOMAGIC_HOTIFS"
+		echo "AUTOMAGIC_HOTNETS:    $AUTOMAGIC_HOTNETS"
+		echo "AUTOMAGIC_DMZIPS:     $AUTOMAGIC_DMZIPS"
+		echo "AUTOMAGIC_DMZIFS:     $AUTOMAGIC_DMZIFS"
+		echo "AUTOMAGIC_DMZNETS:    $AUTOMAGIC_DMZNETS"
+		echo "AUTOMAGIC_EXTIPS:     $AUTOMAGIC_EXTIPS"
+		echo "AUTOMAGIC_EXTIFS:     $AUTOMAGIC_EXTIFS"
+		echo "AUTOMAGIC_EXTNETS:    $AUTOMAGIC_EXTNETS"
+		echo "AUTOMAGIC_EXTIFSREAL: $AUTOMAGIC_EXTIFSREAL"
+
+		echo "AUTOMAGIC Deprecated"
+		echo "AUTOMAGIC_EXTIP:      $AUTOMAGIC_EXTIP"
+		echo "AUTOMAGIC_EXTIF:      $AUTOMAGIC_EXTIF"
+		echo "AUTOMAGIC_EXTNET:     $AUTOMAGIC_EXTNET"
+		echo "AUTOMAGIC_EXTIFREAL:  $AUTOMAGIC_EXTIFREAL"
+	fi
+fi
+
