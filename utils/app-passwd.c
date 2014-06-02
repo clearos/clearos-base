@@ -1,62 +1,109 @@
-///////////////////////////////////////////////////////////////////////////////
+// app-passwd: PAM authentication application for Webconfig
+// Copyright (C) 2014 ClearFoundation <http://www.clearfoundation.com>
 //
-// Copyright 2000 Point Clark Networks.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// This software may be freely redistributed under the terms of the GNU
-// public license.
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-//
-// General synopsis:
-// -Accepts username password pair (seperated by white-space) from standard in.
-// -Looks up username in shadow password file.
-// -Extracts salt from password entry.
-// -Crypts supplied password with extracted salt.
-// -Returns 0 if crypted passwords are identical.
-// -Returns 1 if anything goes wrong along the way.
-//
-// Compilation:
-// # gcc -O2 -s -o cc-passwd -lcrypt cc-passwd.c
-//
-///////////////////////////////////////////////////////////////////////////////
-// $Id: cc-passwd.c,v 1.1.1.1 2004/01/16 03:41:51 devel Exp $
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <crypt.h>
-#include <shadow.h>
 
-// Max salt size is 16 chars + $x[x]$ + NULL
-#define MAX_SALT    (16 + 3 + 1)
+#include <security/pam_appl.h>
 
 // Max user and password, choosing arbitrary value
-#define MAX_USERPASS 128
+#define MAX_USERPASS    128
+
+// PAM application name
+#define PAM_APP_NAME    "system-auth-ac"
 
 // Input buffer
 static char buffer[MAX_USERPASS * 2];
 
-// Salt, user, and password buffers
-static char salt[MAX_SALT], user[MAX_USERPASS], pass[MAX_USERPASS];
+// User, and password buffers
+static char user[MAX_USERPASS], pass[MAX_USERPASS];
+
+// PAM private application data structure
+struct app_data
+{
+    char *user;
+    char *pass;
+};
+
+// Global application data
+static struct app_data ad = {
+    .user = NULL,
+    .pass = NULL,
+};
 
 // Zero memory buffers
 void reset(void)
 {
-    memset(salt, '\0', MAX_SALT);
-    memset(user, '\0', MAX_USERPASS);
-    memset(pass, '\0', MAX_USERPASS);
-    memset(buffer, '\0', MAX_USERPASS * 2);
+    memset(user, 0, MAX_USERPASS);
+    memset(pass, 0, MAX_USERPASS);
+    memset(buffer, 0, MAX_USERPASS * 2);
+
+    if (ad.user != NULL) free(ad.user);
+    if (ad.pass != NULL) free(ad.pass);
 }
+
+// PAM conversation call-back
+int app_conv(int num_msg, const struct pam_message **msgm,
+    struct pam_response **response, void *app_data_ptr)
+{
+    int i;
+    struct app_data *ad = (struct app_data *)app_data_ptr;
+    struct pam_response *resp = calloc(num_msg, sizeof(struct pam_response));
+
+    for (i = 0; i < num_msg; i++) {
+
+        resp[i].resp_retcode = 0;
+
+        switch (msgm[i]->msg_style) {
+
+        // Want user name
+        case PAM_PROMPT_ECHO_ON:
+            resp[0].resp = ad->user;
+            break;
+
+        // Want password
+        case PAM_PROMPT_ECHO_OFF:
+            resp[0].resp = ad->pass;
+            break;
+
+        // Un-handled request...
+        default:
+            free(resp);
+            return PAM_CONV_ERR;
+        }
+    }
+
+    *response = resp;
+    ad->user = NULL;
+    ad->pass = NULL;
+
+    return PAM_SUCCESS;
+}
+
+// Global PAM conversation
+static struct pam_conv conv = {
+    app_conv,
+    (void *)&ad
+};
 
 int main(int argc, char *argv[])
 {
-    int i, j;
-    struct spwd *passwd;
-    int salt_pos = -1, salt_len = 0;
+    int i, j, rc;
+    pam_handle_t *pamh = NULL;
 
     atexit(reset); reset();
 
@@ -84,35 +131,23 @@ int main(int argc, char *argv[])
     if (!strnlen(user, MAX_USERPASS - 1) || !strnlen(pass, MAX_USERPASS - 1))
         return 1;
 
-    if (!(passwd = getspnam(user)))
-        return 1;
+    ad.user = strdup(user);
+    ad.pass = strdup(pass);
 
-    if (passwd->sp_pwdp == NULL)
-        return 1;
+    rc = pam_start(PAM_APP_NAME, ad.user, &conv, &pamh);
 
-    if (passwd->sp_pwdp[0] != '$')
-        return 1;
+    if (rc == PAM_SUCCESS)
+        rc = pam_authenticate(pamh, 0);
 
-    if (passwd->sp_pwdp[2] == '$')
-        salt_pos = 2;
-    else if (passwd->sp_pwdp[3] == '$')
-        salt_pos = 3;
-    else
-        return 1;
+    if (rc == PAM_SUCCESS)
+        rc = pam_acct_mgmt(pamh, 0);
 
-    for (salt_len = salt_pos + 1;
-        salt_len < salt_pos + MAX_SALT - 1; salt_len++) {
-        if (passwd->sp_pwdp[salt_len] == '\0' ||
-            passwd->sp_pwdp[salt_len] == '$') break;
+    if (pam_end(pamh,rc) != PAM_SUCCESS) {
+        pamh = NULL;
+        return 1;
     }
 
-    strncpy(salt, passwd->sp_pwdp, salt_len);
-    strncpy(pass, crypt(pass, salt), MAX_USERPASS - 1);
-
-    if (!strncmp(pass, passwd->sp_pwdp, MAX_USERPASS - 1))
-        return 0;
-
-    return 1;
+    return (rc == PAM_SUCCESS ? 0 : 1);
 }
 
 // vi: expandtab shiftwidth=4 softtabstop=4 tabstop=4

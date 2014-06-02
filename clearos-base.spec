@@ -1,5 +1,5 @@
 Name: clearos-base
-Version: 6.5.0
+Version: 6.5.1
 Release: 1%{dist}
 Summary: Initializes the system environment
 License: GPLv3 or later
@@ -57,7 +57,7 @@ Initializes the system environment
 # Helper tools
 cd utils
 gcc -O2 app-rename.c -o app-rename
-gcc -lcrypt -O2 app-passwd.c -o app-passwd
+gcc -O2 app-passwd.c -o app-passwd -l pam
 gcc -O2 app-realpath.c -o app-realpath
 
 
