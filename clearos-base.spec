@@ -46,6 +46,7 @@ Requires: util-linux
 Requires: which
 Requires: /usr/bin/logger
 Requires: /sbin/pidof
+BuildRequires: pam-devel
 BuildRoot: %_tmppath/%name-%version-buildroot
 
 %description
