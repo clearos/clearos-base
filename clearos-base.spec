@@ -211,6 +211,9 @@ fi
 %{_sbindir}/app-realpath
 
 %changelog
+* Thu Jun 26 2014 ClearFoundation <developer@clearfoundation.com> - 6.6.0-1
+- Changed app-passwd to perform PAM authentication
+
 * Thu May 31 2012 ClearFoundation <developer@clearfoundation.com> - 6.2.2-1
 - Fixed password check space issue (tracker #628)
 - Updated audit policies
