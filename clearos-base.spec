@@ -1,40 +1,51 @@
 Name: clearos-base
-Version: 6.6.0
+Version: 7.0.0
 Release: 1%{dist}
 Summary: Initializes the system environment
 License: GPLv3 or later
 Group: ClearOS/Core
 Source: %{name}-%{version}.tar.gz
 # Base product release information
+%if "0%{dist}" == "0.v6"
 Requires: clearos-release >= 6
+%else
+Requires: clearos-release >= 7
+%endif
 # Core system 
 # - urw-fonts is needed for graphical boot
 # - openssh-server is in core group, but need to disable it
-Requires: audit
+%if "0%{dist}" == "0.v6"
 Requires: cronie
 Requires: gnupg
 Requires: grub
 Requires: kernel >= 2.6.32
-Requires: man
 Requires: man-pages
 Requires: mdadm
+Requires: perl
+Requires: rootfiles
+Requires: telnet
+Requires: urw-fonts
+Requires: bc
+%else
+Requires: gnupg2
+Requires: grub2
+Requires: kernel >= 3.10.0
+Requires: man-db
+%endif
+Requires: audit
+Requires: man
 Requires: mlocate
 Requires: nano
 Requires: openssh-clients
 Requires: openssh-server
 Requires: pam
 Requires: postfix
-Requires: perl
-Requires: rootfiles
 Requires: selinux-policy-targeted
 Requires: sudo
 Requires: rsyslog
-Requires: telnet
-Requires: urw-fonts
 Requires: yum
 Requires: yum-plugin-fastestmirror
 # Common tools used in install and upgrade scripts for app-* packages
-Requires: bc
 Requires: chkconfig
 Requires: coreutils
 Requires: findutils
@@ -70,14 +81,16 @@ mkdir -p -m 755 $RPM_BUILD_ROOT/usr/clearos
 mkdir -p -m 755 $RPM_BUILD_ROOT/var/clearos
 
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/logrotate.d
-mkdir -p -m 755 $RPM_BUILD_ROOT/etc/cron.d
-mkdir -p -m 755 $RPM_BUILD_ROOT/etc/init.d
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/security/limits.d
 mkdir -p -m 755 $RPM_BUILD_ROOT%{_sbindir}
 
+%if "0%{dist}" == "0.v6"
+mkdir -p -m 755 $RPM_BUILD_ROOT/etc/init.d
+install -m 755 etc/init.d/functions-automagic $RPM_BUILD_ROOT/etc/init.d/
+%endif
+
 install -m 644 etc/logrotate.d/compliance $RPM_BUILD_ROOT/etc/logrotate.d/
 install -m 644 etc/logrotate.d/system $RPM_BUILD_ROOT/etc/logrotate.d/
-install -m 755 etc/init.d/functions-automagic $RPM_BUILD_ROOT/etc/init.d/
 install -m 755 etc/security/limits.d/95-clearos.conf $RPM_BUILD_ROOT/etc/security/limits.d/
 
 install -m 755 addsudo $RPM_BUILD_ROOT%{_sbindir}/addsudo
@@ -203,7 +216,9 @@ fi
 %dir /var/clearos
 /etc/logrotate.d/compliance
 /etc/logrotate.d/system
+%if "0%{dist}" == "0.v6"
 /etc/init.d/functions-automagic
+%endif
 /etc/security/limits.d/95-clearos.conf
 %{_sbindir}/addsudo
 %{_sbindir}/app-passwd
@@ -211,6 +226,10 @@ fi
 %{_sbindir}/app-realpath
 
 %changelog
+* Tue Aug 12 2014 ClearFoundation <developer@clearfoundation.com> - 7.0.0-1
+- Updated RPM list for ClearOS 7
+- Removed functions-automagic
+
 * Thu Jun 26 2014 ClearFoundation <developer@clearfoundation.com> - 6.6.0-1
 - Changed app-passwd to perform PAM authentication
 
