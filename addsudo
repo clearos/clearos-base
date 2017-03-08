@@ -58,7 +58,7 @@ if ! grep 'webconfig ALL' /etc/sudoers > /dev/null; then
 fi
 
 LINE=`grep "^Cmnd_Alias CC" /etc/sudoers 2>/dev/null`
-CHECK=`echo $LINE, | grep $1,`
+CHECK=`echo $LINE, | grep -E "\s+$1\s*,|,$1\s*,"`
 if [ -z "$CHECK" ]; then
 	/usr/bin/logger -p local6.notice -t installer "$LOGTAG - adding sudoers entry $1"
 	ESCAPE=`echo $1 | sed 's/\//\\\\\//g'`

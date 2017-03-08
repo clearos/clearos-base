@@ -1,5 +1,5 @@
 Name: clearos-base
-Version: 7.0.0
+Version: 7.0.1
 Release: 1%{dist}
 Summary: Initializes the system environment
 License: GPLv3 or later
