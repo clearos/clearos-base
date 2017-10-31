@@ -5,33 +5,14 @@ Summary: Initializes the system environment
 License: GPLv3 or later
 Group: ClearOS/Core
 Source: %{name}-%{version}.tar.gz
-# Base product release information
-%if "0%{dist}" == "0.v6"
-Requires: clearos-release >= 6
-%else
 Requires: clearos-release >= 7
-%endif
 # Core system 
 # - urw-fonts is needed for graphical boot
 # - openssh-server is in core group, but need to disable it
-%if "0%{dist}" == "0.v6"
-Requires: cronie
-Requires: gnupg
-Requires: grub
-Requires: kernel >= 2.6.32
-Requires: man-pages
-Requires: mdadm
-Requires: perl
-Requires: rootfiles
-Requires: telnet
-Requires: urw-fonts
-Requires: bc
-%else
 Requires: gnupg2
 Requires: grub2
 Requires: kernel >= 3.10.0
 Requires: man-db
-%endif
 Requires: audit
 Requires: man
 Requires: mlocate
@@ -85,11 +66,6 @@ mkdir -p -m 755 $RPM_BUILD_ROOT/var/clearos
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/logrotate.d
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/security/limits.d
 mkdir -p -m 755 $RPM_BUILD_ROOT%{_sbindir}
-
-%if "0%{dist}" == "0.v6"
-mkdir -p -m 755 $RPM_BUILD_ROOT/etc/init.d
-install -m 755 etc/init.d/functions-automagic $RPM_BUILD_ROOT/etc/init.d/
-%endif
 
 install -m 644 etc/logrotate.d/compliance $RPM_BUILD_ROOT/etc/logrotate.d/
 install -m 644 etc/logrotate.d/system $RPM_BUILD_ROOT/etc/logrotate.d/
@@ -221,9 +197,6 @@ fi
 /etc/logrotate.d/compliance
 /etc/logrotate.d/system
 /etc/profile.d/clearos.sh
-%if "0%{dist}" == "0.v6"
-/etc/init.d/functions-automagic
-%endif
 /etc/security/limits.d/95-clearos.conf
 %{_sbindir}/addsudo
 %{_sbindir}/app-passwd
