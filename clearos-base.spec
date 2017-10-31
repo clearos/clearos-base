@@ -1,5 +1,5 @@
 Name: clearos-base
-Version: 7.0.1
+Version: 7.0.2
 Release: 1%{dist}
 Summary: Initializes the system environment
 License: GPLv3 or later
@@ -77,7 +77,9 @@ gcc -O2 app-realpath.c -o app-realpath
 rm -rf $RPM_BUILD_ROOT
 
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/clearos
+mkdir -p -m 755 $RPM_BUILD_ROOT/etc/profile.d
 mkdir -p -m 755 $RPM_BUILD_ROOT/usr/clearos
+mkdir -p -m 755 $RPM_BUILD_ROOT/usr/clearos/bin
 mkdir -p -m 755 $RPM_BUILD_ROOT/var/clearos
 
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/logrotate.d
@@ -91,6 +93,7 @@ install -m 755 etc/init.d/functions-automagic $RPM_BUILD_ROOT/etc/init.d/
 
 install -m 644 etc/logrotate.d/compliance $RPM_BUILD_ROOT/etc/logrotate.d/
 install -m 644 etc/logrotate.d/system $RPM_BUILD_ROOT/etc/logrotate.d/
+install -m 644 etc/profile.d/clearos.sh $RPM_BUILD_ROOT/etc/profile.d/
 install -m 755 etc/security/limits.d/95-clearos.conf $RPM_BUILD_ROOT/etc/security/limits.d/
 
 install -m 755 addsudo $RPM_BUILD_ROOT%{_sbindir}/addsudo
@@ -213,9 +216,11 @@ fi
 %defattr(-,root,root)
 %dir /etc/clearos
 %dir /usr/clearos
+%dir /usr/clearos/bin
 %dir /var/clearos
 /etc/logrotate.d/compliance
 /etc/logrotate.d/system
+/etc/profile.d/clearos.sh
 %if "0%{dist}" == "0.v6"
 /etc/init.d/functions-automagic
 %endif
@@ -226,6 +231,9 @@ fi
 %{_sbindir}/app-realpath
 
 %changelog
+* Tue Oct 31 2017 ClearFoundation <developer@clearfoundation.com> - 7.0.2-1
+- Added bin directory and PATH change
+
 * Tue Aug 12 2014 ClearFoundation <developer@clearfoundation.com> - 7.0.0-1
 - Updated RPM list for ClearOS 7
 - Removed functions-automagic
