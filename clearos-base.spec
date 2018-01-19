@@ -159,14 +159,6 @@ if [ $1 -eq 1 ]; then
     /sbin/chkconfig auditd on >/dev/null 2>&1
 fi
 
-# Disable SSH server by default.  Install SSH Server app if it is desired
-#------------------------------------------------------------------------
-
-if [ $1 -eq 1 ]; then
-    logger -p local6.notice -t installer "clearos-base - disabling SSH server on boot"
-    /sbin/chkconfig sshd off >/dev/null 2>&1
-fi
-
 exit 0
 
 %preun
