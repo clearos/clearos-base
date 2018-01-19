@@ -1,14 +1,11 @@
 Name: clearos-base
-Version: 7.0.2
+Version: 7.4.0
 Release: 1%{dist}
 Summary: Initializes the system environment
 License: GPLv3 or later
 Group: ClearOS/Core
 Source: %{name}-%{version}.tar.gz
 Requires: clearos-release >= 7
-# Core system 
-# - urw-fonts is needed for graphical boot
-# - openssh-server is in core group, but need to disable it
 Requires: gnupg2
 Requires: grub2
 Requires: kernel >= 3.10.0
@@ -18,14 +15,11 @@ Requires: man
 Requires: mlocate
 Requires: nano
 Requires: openssh-clients
-Requires: openssh-server
 Requires: pam
-Requires: postfix
 Requires: selinux-policy-targeted
 Requires: sudo
 Requires: rsyslog
 Requires: yum
-Requires: yum-plugin-fastestmirror
 # Common tools used in install and upgrade scripts for app-* packages
 Requires: chkconfig
 Requires: coreutils
@@ -171,14 +165,6 @@ fi
 if [ $1 -eq 1 ]; then
     logger -p local6.notice -t installer "clearos-base - disabling SSH server on boot"
     /sbin/chkconfig sshd off >/dev/null 2>&1
-fi
-
-# Postfix should be disabled unless specifically required
-#--------------------------------------------------------
-
-if [ $1 -eq 1 ]; then
-    logger -p local6.notice -t installer "clearos-base - disabling outbound mailer for now"
-    /sbin/chkconfig postfix off >/dev/null 2>&1
 fi
 
 exit 0
