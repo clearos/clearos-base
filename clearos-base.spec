@@ -1,77 +1,28 @@
 Name: clearos-base
 Version: 7.4.0
 Release: 1%{dist}
-Summary: Initializes the system environment
+Summary: ClearOS system base security driver.
 License: GPLv3 or later
-Group: ClearOS/Core
+Group: Applications/System
 Source: %{name}-%{version}.tar.gz
 Requires: clearos-release >= 7
-Requires: gnupg2
-Requires: grub2
-Requires: kernel >= 3.10.0
-Requires: man-db
-Requires: audit
-Requires: man
-Requires: mlocate
-Requires: nano
-Requires: openssh-clients
-Requires: pam
-Requires: selinux-policy-targeted
-Requires: sudo
-Requires: rsyslog
-Requires: yum
-# Common tools used in install and upgrade scripts for app-* packages
-Requires: chkconfig
-Requires: coreutils
-Requires: findutils
-Requires: gawk
-Requires: grep
-Requires: sed
-Requires: shadow-utils
-Requires: util-linux
-Requires: which
-Requires: /usr/bin/logger
-Requires: /sbin/pidof
-BuildRequires: pam-devel
-BuildRoot: %_tmppath/%name-%version-buildroot
+Provides: system-base-security
 
 %description
-Initializes the system environment
+ClearOS system base security driver.
 
 %prep
 %setup -q
 %build
-# Helper tools
-cd utils
-gcc -O2 app-rename.c -o app-rename
-gcc -O2 app-passwd.c -o app-passwd -l pam
-gcc -O2 app-realpath.c -o app-realpath
-
 
 %install
 rm -rf $RPM_BUILD_ROOT
 
-mkdir -p -m 755 $RPM_BUILD_ROOT/etc/clearos
-mkdir -p -m 755 $RPM_BUILD_ROOT/etc/profile.d
-mkdir -p -m 755 $RPM_BUILD_ROOT/usr/clearos
-mkdir -p -m 755 $RPM_BUILD_ROOT/usr/clearos/bin
-mkdir -p -m 755 $RPM_BUILD_ROOT/var/clearos
-
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/logrotate.d
 mkdir -p -m 755 $RPM_BUILD_ROOT/etc/security/limits.d
-mkdir -p -m 755 $RPM_BUILD_ROOT%{_sbindir}
 
 install -m 644 etc/logrotate.d/compliance $RPM_BUILD_ROOT/etc/logrotate.d/
-install -m 644 etc/logrotate.d/system $RPM_BUILD_ROOT/etc/logrotate.d/
-install -m 644 etc/profile.d/clearos.sh $RPM_BUILD_ROOT/etc/profile.d/
 install -m 755 etc/security/limits.d/95-clearos.conf $RPM_BUILD_ROOT/etc/security/limits.d/
-
-install -m 755 addsudo $RPM_BUILD_ROOT%{_sbindir}/addsudo
-
-# Helper tools
-install -m 755 utils/app-passwd $RPM_BUILD_ROOT%{_sbindir}
-install -m 755 utils/app-rename $RPM_BUILD_ROOT%{_sbindir}
-install -m 755 utils/app-realpath $RPM_BUILD_ROOT%{_sbindir}
 
 #------------------------------------------------------------------------------
 # I N S T A L L  S C R I P T
@@ -82,13 +33,6 @@ logger -p local6.notice -t installer "clearos-base - installing"
 
 # Syslog customizations
 #----------------------
-
-if [ -z "`grep ^local6 /etc/rsyslog.conf`" ]; then
-    logger -p local6.notice -t installer "clearos-base - adding system log file to rsyslog"
-    echo "local6.*  /var/log/system" >> /etc/rsyslog.conf
-    sed -i -e 's/[[:space:]]*\/var\/log\/messages/;local6.none \/var\/log\/messages/' /etc/rsyslog.conf
-    /sbin/service rsyslog restart >/dev/null 2>&1
-fi
 
 if [ -z "`grep ^local5 /etc/rsyslog.conf`" ]; then
     logger -p local5.notice -t installer "clearos-base - adding compliance log file to rsyslog"
@@ -111,46 +55,6 @@ if [ -d /etc/selinux ]; then
     fi
 fi
 
-# Sudo policies
-#--------------
-
-CHECKSUDO=`grep '^Defaults:webconfig !syslog' /etc/sudoers 2>/dev/null`
-if [ -z "$CHECKSUDO" ]; then
-    logger -p local6.notice -t installer "clearos-base - adding syslog policy for webconfig"
-    echo 'Defaults:webconfig !syslog' >> /etc/sudoers
-    chmod 0440 /etc/sudoers
-fi
-
-CHECKSUDO=`grep '^Defaults:root !syslog' /etc/sudoers 2>/dev/null`
-if [ -z "$CHECKSUDO" ]; then
-    logger -p local6.notice -t installer "clearos-base - adding syslog policy for root"
-    echo 'Defaults:root !syslog' >> /etc/sudoers
-    chmod 0440 /etc/sudoers
-fi
-
-CHECKTTY=`grep '^Defaults.*requiretty' /etc/sudoers 2>/dev/null`
-if [ -n "$CHECKTTY" ]; then
-    logger -p local6.notice -t installer "clearos-base - removing requiretty from sudoers"
-    sed -i -e 's/^Defaults.*requiretty/# Defaults    requiretty/' /etc/sudoers
-    chmod 0440 /etc/sudoers
-fi
-
-# slocate/mlocate upgrade
-#------------------------
-
-CHECK=`grep '^export' /etc/updatedb.conf 2>/dev/null`
-if [ -n "$CHECK" ]; then
-    CHECK=`grep '^export' /etc/updatedb.conf.rpmnew 2>/dev/null`
-    if ( [ -e "/etc/updatedb.conf.rpmnew" ] && [ -z "$CHECK" ] ); then
-        logger -p local6.notice -t installer "clearos-base - migrating configuration from slocate to mlocate"
-        cp -p /etc/updatedb.conf.rpmnew /etc/updatedb.conf
-    else
-        logger -p local6.notice -t installer "clearos-base - creating default configuration for mlocate"
-        echo "PRUNEFS = \"auto afs iso9660 sfs udf\"" > /etc/updatedb.conf
-        echo "PRUNEPATHS = \"/afs /media /net /sfs /tmp /udev /var/spool/cups /var/spool/squid /var/tmp\"" >> /etc/updatedb.conf
-    fi
-fi
-
 # Enable audit by default
 #------------------------
 
@@ -168,20 +72,13 @@ fi
 
 %files
 %defattr(-,root,root)
-%dir /etc/clearos
-%dir /usr/clearos
-%dir /usr/clearos/bin
-%dir /var/clearos
 /etc/logrotate.d/compliance
-/etc/logrotate.d/system
-/etc/profile.d/clearos.sh
 /etc/security/limits.d/95-clearos.conf
-%{_sbindir}/addsudo
-%{_sbindir}/app-passwd
-%{_sbindir}/app-rename
-%{_sbindir}/app-realpath
 
 %changelog
+* Fri Mar 30 2018 ClearFoundation <developer@clearfoundation.com> - 7.4.0-1
+- Split out security components into system-base-security
+
 * Tue Oct 31 2017 ClearFoundation <developer@clearfoundation.com> - 7.0.2-1
 - Added bin directory and PATH change
 
